@@ -1,12 +1,28 @@
 {
-  "name": "ecommerce-project",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "ecommerce-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Enterprise-grade API-first E-Commerce platform (Turborepo monorepo)",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "db:migrate": "pnpm --filter database migrate:latest",
+    "db:rollback": "pnpm --filter database migrate:rollback",
+    "db:seed": "pnpm --filter database seed:run",
+    "clean": "turbo run clean && rm -rf node_modules"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.1"
 }

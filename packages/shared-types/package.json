@@ -1,0 +1,23 @@
+{
+  "name": "@ecommerce/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared TypeScript interfaces, DTOs, and enums for the e-commerce platform",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

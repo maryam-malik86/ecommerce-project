@@ -1,6 +1,13 @@
 node_modules/
 .env
+.env.local
+.env.*.local
 dist/
 build/
 coverage/
 *.log
+.turbo/
+.next/
+.vercel/
+pnpm-lock.yaml
+*.tsbuildinfo
