@@ -35,6 +35,11 @@ export class InventoryService {
     return this.repo.findSupplierById(id);
   }
 
+  async deleteSupplier(id: number) {
+    await this.getSupplier(id);
+    await this.repo.deleteSupplier(id);
+  }
+
   // ── Stock Movements ─────────────────────────────────────────────────────────
   // All stock adjustments run inside a MySQL transaction:
   // 1. Log the movement in the stock_movements ledger

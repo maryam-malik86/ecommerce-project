@@ -22,6 +22,20 @@ export class CatalogRepository {
     return id as number;
   }
 
+  async updateCategory(id: number, data: Partial<Category>): Promise<void> {
+    await this.db('categories').where({ id }).update({ ...data, updated_at: new Date() });
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    // Unlink products or re-assign to another category
+    const fallback = await this.db('categories').whereNot({ id }).first();
+    const fallbackId = fallback ? fallback.id : null;
+
+    await this.db('products').where({ category_id: id }).update({ category_id: fallbackId });
+    await this.db('categories').where({ parent_id: id }).update({ parent_id: null });
+    await this.db('categories').where({ id }).delete();
+  }
+
   // ── Products ────────────────────────────────────────────────────────────────
 
   async findProducts(query: ProductQueryInput): Promise<{ rows: Product[]; total: number }> {
@@ -85,6 +99,26 @@ export class CatalogRepository {
   }
 
   async deleteProduct(id: number): Promise<void> {
+    const variants = await this.db('product_variants').where({ product_id: id });
+    const variantIds = variants.map((v) => v.id);
+
+    if (variantIds.length > 0) {
+      // Check if variants have been purchased in orders
+      const res = await this.db('order_items').whereIn('variant_id', variantIds).count('* as total');
+      const total = Number((res[0] as any)?.total ?? 0);
+      if (total > 0) {
+        // If ordered, soft-archive the product to preserve historical invoice records
+        await this.db('products').where({ id }).update({ status: 'archived', updated_at: new Date() });
+        return;
+      }
+      // Safe to hard delete unpurchased variants and movements
+      await this.db('stock_movements').whereIn('variant_id', variantIds).delete();
+      await this.db('cart_items').whereIn('variant_id', variantIds).delete();
+      await this.db('stock_reservations').whereIn('variant_id', variantIds).delete();
+      await this.db('product_variants').where({ product_id: id }).delete();
+    }
+
+    await this.db('product_images').where({ product_id: id }).delete();
     await this.db('products').where({ id }).delete();
   }
 

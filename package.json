@@ -9,9 +9,9 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
-    "db:migrate": "pnpm --filter database migrate:latest",
-    "db:rollback": "pnpm --filter database migrate:rollback",
-    "db:seed": "pnpm --filter database seed:run",
+    "db:migrate": "pnpm --filter @ecommerce/database migrate:latest",
+    "db:rollback": "pnpm --filter @ecommerce/database migrate:rollback",
+    "db:seed": "pnpm --filter @ecommerce/database seed:run",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {

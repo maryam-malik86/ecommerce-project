@@ -27,4 +27,19 @@ export class AuthRepository {
     });
     return id as number;
   }
+
+  async findAll(search?: string, role?: string): Promise<User[]> {
+    let q = this.db('users').select('id', 'name', 'email', 'role', 'is_active', 'created_at', 'updated_at').orderBy('id', 'desc');
+    if (search) q = q.whereILike('name', `%${search}%`).orWhereILike('email', `%${search}%`);
+    if (role) q = q.where({ role });
+    return q as Promise<User[]>;
+  }
+
+  async update(id: number, data: Partial<User>): Promise<void> {
+    await this.db('users').where({ id }).update({ ...data, updated_at: new Date() });
+  }
+
+  async delete(id: number): Promise<void> {
+    await this.db('users').where({ id }).delete();
+  }
 }

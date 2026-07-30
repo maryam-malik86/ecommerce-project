@@ -24,7 +24,25 @@ export class CatalogService {
 
   async createCategory(name: string, description?: string, parent_id?: number) {
     const slug = toSlug(name);
-    return this.repo.createCategory({ name, slug, description, parent_id });
+    const id = await this.repo.createCategory({ name, slug, description, parent_id });
+    return this.repo.findCategoryById(id);
+  }
+
+  async updateCategory(id: number, name?: string, description?: string, parent_id?: number | null) {
+    const existing = await this.repo.findCategoryById(id);
+    if (!existing) throw createApiError(404, `Category with id ${id} not found`);
+    const data: Record<string, any> = {};
+    if (name) { data['name'] = name; data['slug'] = toSlug(name); }
+    if (description !== undefined) data['description'] = description;
+    if (parent_id !== undefined) data['parent_id'] = parent_id;
+    await this.repo.updateCategory(id, data);
+    return this.repo.findCategoryById(id);
+  }
+
+  async deleteCategory(id: number): Promise<void> {
+    const existing = await this.repo.findCategoryById(id);
+    if (!existing) throw createApiError(404, `Category with id ${id} not found`);
+    await this.repo.deleteCategory(id);
   }
 
   // ── Products ────────────────────────────────────────────────────────────────
@@ -97,6 +115,40 @@ export class CatalogService {
       ...(input.description !== undefined && { description: input.description }),
       ...(input.status && { status: input.status }),
     });
+
+    if (input.variants && input.variants.length > 0) {
+      for (const v of input.variants) {
+        const firstVariant = existing.variants?.[0];
+        if (v.id) {
+          await this.repo.updateVariant(v.id, {
+            sku: v.sku,
+            option_label: v.option_label,
+            cost_price: v.cost_price,
+            selling_price: v.selling_price,
+            stock_quantity: v.stock_quantity,
+          });
+        } else if (firstVariant) {
+          await this.repo.updateVariant(firstVariant.id, {
+            sku: v.sku,
+            option_label: v.option_label,
+            cost_price: v.cost_price,
+            selling_price: v.selling_price,
+            stock_quantity: v.stock_quantity,
+          });
+        } else {
+          await this.repo.createVariant({
+            product_id: id,
+            sku: v.sku,
+            option_label: v.option_label,
+            cost_price: v.cost_price,
+            selling_price: v.selling_price,
+            stock_quantity: v.stock_quantity,
+            low_stock_threshold: v.low_stock_threshold ?? 5,
+            image_url: v.image_url ?? null,
+          });
+        }
+      }
+    }
 
     return this.repo.findProductByIdWithVariants(id);
   }

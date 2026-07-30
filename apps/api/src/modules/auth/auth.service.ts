@@ -80,4 +80,26 @@ export class AuthService {
     const { ...profile } = user;
     return profile;
   }
+
+  async getUsers(search?: string, role?: string) {
+    return this.repo.findAll(search, role);
+  }
+
+  async updateUser(id: number, input: { name?: string; role?: string; is_active?: boolean; password?: string }) {
+    const existing = await this.repo.findById(id);
+    if (!existing) throw createApiError(404, `User with id ${id} not found`);
+    const updateData: Record<string, any> = {};
+    if (input.name) updateData['name'] = input.name;
+    if (input.role) updateData['role'] = input.role;
+    if (input.is_active !== undefined) updateData['is_active'] = input.is_active;
+    if (input.password) updateData['password_hash'] = await bcrypt.hash(input.password, 12);
+    await this.repo.update(id, updateData);
+    return this.repo.findById(id);
+  }
+
+  async deleteUser(id: number) {
+    const existing = await this.repo.findById(id);
+    if (!existing) throw createApiError(404, `User with id ${id} not found`);
+    await this.repo.delete(id);
+  }
 }

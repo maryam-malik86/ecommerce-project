@@ -17,6 +17,34 @@ export class CatalogController {
     } catch (err) { next(err); }
   }
 
+  // POST /catalog/categories  [admin]
+  async createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { name, description, parent_id } = req.body;
+      const data = await catalogService.createCategory(name, description, parent_id ? Number(parent_id) : undefined);
+      res.status(201).json({ success: true, message: 'Category created', data });
+    } catch (err) { next(err); }
+  }
+
+  // PATCH /catalog/categories/:id  [admin]
+  async updateCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params['id']);
+      const { name, description, parent_id } = req.body;
+      const parsedParentId = (parent_id === null || parent_id === '' || parent_id === undefined) ? null : Number(parent_id);
+      const data = await catalogService.updateCategory(id, name, description, parsedParentId);
+      res.json({ success: true, message: 'Category updated', data });
+    } catch (err) { next(err); }
+  }
+
+  // DELETE /catalog/categories/:id  [admin]
+  async deleteCategory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await catalogService.deleteCategory(Number(req.params['id']));
+      res.json({ success: true, message: 'Category deleted', data: null });
+    } catch (err) { next(err); }
+  }
+
   // GET /catalog/products
   async getProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {

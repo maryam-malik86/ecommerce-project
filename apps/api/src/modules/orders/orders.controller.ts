@@ -50,4 +50,12 @@ export class OrdersController {
       res.json({ success: true, message: 'Order status updated', data });
     } catch (err) { next(err); }
   }
+
+  // DELETE /orders/:id  [admin]
+  async deleteOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await ordersService.deleteOrder(Number(req.params['id']));
+      res.json({ success: true, message: 'Order deleted', data: null });
+    } catch (err) { next(err); }
+  }
 }

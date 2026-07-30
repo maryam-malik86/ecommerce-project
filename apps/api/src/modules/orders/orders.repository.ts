@@ -110,4 +110,9 @@ export class OrdersRepository {
       .where({ order_id: orderId, status: 'pending' })
       .update({ status: 'confirmed' });
   }
+
+  async deleteOrder(id: number): Promise<void> {
+    await this.db('order_items').where({ order_id: id }).delete();
+    await this.db('orders').where({ id }).delete();
+  }
 }

@@ -15,12 +15,20 @@ export type PaymentStatus = 'unpaid' | 'paid' | 'partially_paid' | 'refunded';
 
 export interface Order {
   id: number;
+  order_number?: string | null;
+  idempotency_key?: string | null;
   user_id: number;
   status: OrderStatus;
   payment_status: PaymentStatus;
   shipping_address: string; // JSON string
+  billing_address?: string | null; // JSON string
   notes: string | null;
+  subtotal_amount?: number;
+  discount_amount?: number;
+  shipping_amount?: number;
+  tax_amount?: number;
   total_amount: number;
+  discount_id?: number | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -12,6 +12,9 @@ router.use(jwtAuthMiddleware);
 // POST /orders/checkout — customers place orders
 router.post('/checkout', rbac('customer'), (req, res, next) => ctrl.checkout(req, res, next));
 
+// POST /orders — admin manual order creation
+router.post('/', rbac('admin'), (req, res, next) => ctrl.checkout(req, res, next));
+
 // GET /orders — admin sees all, customer sees own
 router.get('/', (req, res, next) => ctrl.listOrders(req, res, next));
 
@@ -20,5 +23,8 @@ router.get('/:id', (req, res, next) => ctrl.getOrder(req, res, next));
 
 // PATCH /orders/:id/status — admin only
 router.patch('/:id/status', rbac('admin'), (req, res, next) => ctrl.updateStatus(req, res, next));
+
+// DELETE /orders/:id — admin only
+router.delete('/:id', rbac('admin'), (req, res, next) => ctrl.deleteOrder(req, res, next));
 
 export default router;

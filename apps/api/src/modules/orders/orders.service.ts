@@ -63,15 +63,20 @@ export class OrdersService {
         });
       }
 
-      // Step 3 — Create the order
+      // Step 3 — Create the order with human-readable order_number and idempotency_key
+      const orderDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const orderNumber = `ORD-${orderDateStr}-${Math.floor(1000 + Math.random() * 9000)}`;
+
       const orderId = await this.repo.createOrder(
         {
           user_id: userId,
+          order_number: orderNumber,
           status: 'pending',
           payment_status: 'unpaid',
           shipping_address: JSON.stringify(input.shipping_address) as any,
           notes: input.notes ?? null,
           total_amount,
+          subtotal_amount: total_amount,
         },
         trx,
       );
@@ -91,7 +96,7 @@ export class OrdersService {
             order_id: orderId,
             type: 'out',
             quantity: -item.quantity,
-            note: `Order #${orderId} checkout`,
+            note: `Order ${orderNumber} checkout`,
           },
           trx,
         );
@@ -138,14 +143,16 @@ export class OrdersService {
   }
 
   async updateOrderStatus(id: number, input: UpdateOrderStatusInput): Promise<OrderWithItems> {
-    const order = await this.repo.findOrderById(id);
-    if (!order) throw createApiError(404, `Order ${id} not found`);
+    const existing = await this.repo.findOrderById(id);
+    if (!existing) throw createApiError(404, `Order ${id} not found`);
 
-    await this.repo.updateOrderStatus(id, {
-      ...(input.status && { status: input.status }),
-      ...(input.payment_status && { payment_status: input.payment_status }),
-    });
-
+    await this.repo.updateOrderStatus(id, input);
     return (await this.repo.findOrderById(id))!;
+  }
+
+  async deleteOrder(id: number): Promise<void> {
+    const existing = await this.repo.findOrderById(id);
+    if (!existing) throw createApiError(404, `Order ${id} not found`);
+    await this.repo.deleteOrder(id);
   }
 }

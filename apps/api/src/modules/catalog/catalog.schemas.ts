@@ -1,24 +1,31 @@
 import { z } from 'zod';
 
 export const CreateVariantSchema = z.object({
+  id: z.number().int().optional(),
   sku: z.string().min(1).max(100),
   option_label: z.string().min(1).max(255),
   cost_price: z.number().positive(),
   selling_price: z.number().positive(),
   stock_quantity: z.number().int().min(0).default(0),
   low_stock_threshold: z.number().int().min(0).default(5),
-  image_url: z.string().url().optional(),
+  image_url: z.string().url().optional().nullable(),
 });
 
 export const CreateProductSchema = z.object({
   category_id: z.number().int().positive(),
   name: z.string().min(1).max(255),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   status: z.enum(['active', 'inactive', 'archived']).default('active'),
   variants: z.array(CreateVariantSchema).min(1, 'At least one variant is required'),
 });
 
-export const UpdateProductSchema = CreateProductSchema.partial().omit({ variants: true });
+export const UpdateProductSchema = z.object({
+  category_id: z.number().int().positive().optional(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().optional().nullable(),
+  status: z.enum(['active', 'inactive', 'archived']).optional(),
+  variants: z.array(CreateVariantSchema).optional(),
+});
 
 export const ProductQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),

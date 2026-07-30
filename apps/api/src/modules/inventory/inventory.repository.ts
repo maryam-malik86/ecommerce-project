@@ -25,6 +25,10 @@ export class InventoryRepository {
     await this.db('suppliers').where({ id }).update({ ...data, updated_at: new Date() });
   }
 
+  async deleteSupplier(id: number): Promise<void> {
+    await this.db('suppliers').where({ id }).delete();
+  }
+
   // ── Stock Movements ─────────────────────────────────────────────────────────
 
   async createMovement(

@@ -16,6 +16,9 @@ import inventoryRoutes from './modules/inventory/inventory.routes.js';
 import ordersRoutes from './modules/orders/orders.routes.js';
 import analyticsRoutes from './modules/analytics/analytics.routes.js';
 import marketingRoutes from './modules/marketing/marketing.routes.js';
+import settingsRoutes from './modules/settings/settings.routes.js';
+import discountsRoutes from './modules/discounts/discounts.routes.js';
+import cartRoutes from './modules/cart/cart.routes.js';
 
 const app: Express = express();
 
@@ -82,6 +85,9 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/orders', ordersRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/marketing', marketingRoutes);
+app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/discounts', discountsRoutes);
+app.use('/api/v1/cart', cartRoutes);
 
 // ── 404 + Global Error Handler ─────────────────────────────────────────────────
 app.use(notFoundHandler);

@@ -31,6 +31,14 @@ export class InventoryController {
     } catch (err) { next(err); }
   }
 
+  // DELETE /inventory/suppliers/:id  [admin]
+  async deleteSupplier(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await inventoryService.deleteSupplier(Number(req.params['id']));
+      res.json({ success: true, message: 'Supplier deleted', data: null });
+    } catch (err) { next(err); }
+  }
+
   // POST /inventory/movements  [admin, supplier]
   async recordMovement(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {

@@ -12,7 +12,7 @@ export function initDb() {
       user: env.DB_USER,
       password: env.DB_PASSWORD,
       database: env.DB_NAME,
-      timezone: 'UTC',
+      timezone: '+00:00',
       charset: 'utf8mb4',
     },
     pool: {

@@ -34,4 +34,29 @@ export class AuthController {
       next(err);
     }
   }
+
+  async getUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const search = req.query['search'] as string | undefined;
+      const role = req.query['role'] as string | undefined;
+      const data = await authService.getUsers(search, role);
+      res.json({ success: true, message: 'Users retrieved', data });
+    } catch (err) { next(err); }
+  }
+
+  async updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params['id']);
+      const data = await authService.updateUser(id, req.body);
+      res.json({ success: true, message: 'User updated', data });
+    } catch (err) { next(err); }
+  }
+
+  async deleteUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const id = Number(req.params['id']);
+      await authService.deleteUser(id);
+      res.json({ success: true, message: 'User deleted', data: null });
+    } catch (err) { next(err); }
+  }
 }
