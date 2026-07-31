@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -76,7 +77,7 @@ export default function DashboardPage() {
   const stats = [
     {
       label: 'Net Profit',
-      value: profit ? `$${Number(profit.net_profit).toFixed(2)}` : '—',
+      value: profit ? `$${Number(profit.net_profit || 0).toFixed(2)}` : '—',
       color: '#16a34a',
       icon: (
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -87,7 +88,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Total Revenue',
-      value: profit ? `$${Number(profit.total_revenue).toFixed(2)}` : '—',
+      value: profit ? `$${Number(profit.total_revenue || 0).toFixed(2)}` : '—',
       color: '#7c3aed',
       icon: (
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -98,7 +99,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Total Orders',
-      value: profit ? String(profit.total_orders) : '—',
+      value: profit ? String(profit.total_orders || 0) : '—',
       color: '#2563eb',
       icon: (
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -109,7 +110,7 @@ export default function DashboardPage() {
     },
     {
       label: 'Avg Order Value',
-      value: profit ? `$${Number(profit.avg_order_value).toFixed(2)}` : '—',
+      value: profit ? `$${Number(profit.avg_order_value || 0).toFixed(2)}` : '—',
       color: '#ea580c',
       icon: (
         <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -120,9 +121,9 @@ export default function DashboardPage() {
   ];
 
   const chartData = (timeSeries ?? []).map((d) => ({
-    date: d.period.slice(5),
-    revenue: parseFloat(d.revenue),
-    orders: d.orders,
+    date: d.period ? d.period.slice(5) : '',
+    revenue: parseFloat(d.revenue || '0'),
+    orders: d.orders || 0,
   }));
 
   return (
@@ -208,9 +209,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-5 py-4 border-b"
              style={{ borderColor: 'var(--ui-border-base)' }}>
           <h2 className="section-title">Recent Orders</h2>
-          <a href="/orders" className="text-xs font-medium" style={{ color: 'var(--ui-accent)' }}>
+          <Link to="/orders" className="text-xs font-medium" style={{ color: 'var(--ui-accent)' }}>
             View all →
-          </a>
+          </Link>
         </div>
         {loadingOrders ? (
           <TableSkeleton rows={5} cols={5} />
@@ -229,8 +230,12 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {(recentOrders ?? []).slice(0, 5).map((order) => (
-                  <tr key={order.id}>
-                    <td className="font-medium" style={{ color: 'var(--ui-accent)' }}>#{order.id}</td>
+                  <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                    <td>
+                      <Link to={`/orders/${order.id}`} className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                        #{order.id}
+                      </Link>
+                    </td>
                     <td>{order.user_name || order.user_email || '—'}</td>
                     <td><OrderStatusBadge status={order.status} /></td>
                     <td>

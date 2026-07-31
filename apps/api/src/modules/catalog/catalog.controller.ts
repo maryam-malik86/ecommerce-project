@@ -1,14 +1,18 @@
 import type { Request, Response, NextFunction } from 'express';
 import { CatalogService } from './catalog.service.js';
-import {
-  CreateProductSchema,
-  UpdateProductSchema,
-  ProductQuerySchema,
-} from './catalog.schemas.js';
+import { ProductQuerySchema } from './catalog.schemas.js';
 
 const catalogService = new CatalogService();
 
 export class CatalogController {
+  // GET /catalog/suppliers
+  async getSuppliers(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const data = await catalogService.getAllSuppliers();
+      res.json({ success: true, message: 'Suppliers retrieved', data });
+    } catch (err) { next(err); }
+  }
+
   // GET /catalog/categories
   async getCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
@@ -65,8 +69,7 @@ export class CatalogController {
   // POST /catalog/products  [admin]
   async createProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input = CreateProductSchema.parse(req.body);
-      const data = await catalogService.createProduct(input);
+      const data = await catalogService.createProduct(req.body);
       res.status(201).json({ success: true, message: 'Product created', data });
     } catch (err) { next(err); }
   }
@@ -74,8 +77,7 @@ export class CatalogController {
   // PATCH /catalog/products/:id  [admin]
   async updateProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input = UpdateProductSchema.parse(req.body);
-      const data = await catalogService.updateProduct(Number(req.params['id']), input);
+      const data = await catalogService.updateProduct(Number(req.params['id']), req.body);
       res.json({ success: true, message: 'Product updated', data });
     } catch (err) { next(err); }
   }

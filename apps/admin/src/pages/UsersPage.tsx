@@ -6,11 +6,13 @@ import { TableSkeleton } from '../components/ui/Spinner';
 import EmptyState from '../components/ui/EmptyState';
 import { toast } from 'sonner';
 
+import { useDynamicRoles, getRoleById } from '../services/roles';
+
 interface UserItem {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'supplier' | 'customer';
+  role: string;
   is_active: boolean;
   created_at: string;
   total_orders?: number;
@@ -29,12 +31,13 @@ const emptyForm = {
   name: '',
   email: '',
   password: '',
-  role: 'admin' as 'admin' | 'supplier' | 'customer',
+  role: 'admin',
   is_active: true,
 };
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const availableRoles = useDynamicRoles();
   const [activeTab, setActiveTab] = useState<'staff' | 'customers'>('staff');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
@@ -358,10 +361,11 @@ export default function UsersPage() {
               <select
                 className="select"
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as any })}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
-                <option value="admin">Admin</option>
-                <option value="supplier">Supplier</option>
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
                 <option value="customer">Customer</option>
               </select>
             </div>

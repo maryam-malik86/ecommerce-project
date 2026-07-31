@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import api from '../services/api';
@@ -49,9 +50,11 @@ async function fetchProducts() {
 }
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') || searchParams.get('id') || '');
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [updateOrder, setUpdateOrder] = useState<Order | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -234,37 +237,35 @@ export default function OrdersPage() {
               </thead>
               <tbody>
                 {orders.map((order) => (
-                  <tr key={order.id}>
+                  <tr key={order.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors cursor-pointer" onClick={() => navigate(`/orders/${order.id}`)}>
                     <td>
-                      <button
-                        className="font-semibold hover:underline"
-                        style={{ color: 'var(--ui-accent)' }}
-                        onClick={() => setViewOrder(order)}
+                      <Link
+                        to={`/orders/${order.id}`}
+                        className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
                       >
                         #{order.id}
-                      </button>
+                      </Link>
                     </td>
                     <td>
                       <div style={{ color: 'var(--ui-fg-base)' }}>{order.user_name || 'Customer'}</div>
-                      <div className="text-xs" style={{ color: 'var(--ui-fg-muted)' }}>{order.user_email}</div>
+                      <div className="text-xs font-mono" style={{ color: 'var(--ui-fg-muted)' }}>{order.user_email}</div>
                     </td>
                     <td><OrderStatusBadge status={order.status} /></td>
                     <td><PaymentBadge status={order.payment_status} /></td>
-                    <td className="font-semibold">${Number(order.total_amount).toFixed(2)}</td>
+                    <td className="font-bold">${Number(order.total_amount).toFixed(2)}</td>
                     <td style={{ color: 'var(--ui-fg-muted)' }}>
                       {new Date(order.created_at).toLocaleDateString()}
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">
-                        <button
-                          onClick={() => setViewOrder(order)}
-                          className="btn-ghost w-7 h-7 p-0 rounded"
-                          title="View Invoice & Details"
+                        <Link
+                          to={`/orders/${order.id}`}
+                          className="btn-secondary text-xs py-1 px-2.5 flex items-center gap-1"
+                          title="View Full Order Detail Page"
                         >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                          </svg>
-                        </button>
+                          View Detail →
+                        </Link>
                         <button
                           onClick={() => openUpdate(order)}
                           className="btn-secondary text-xs py-1 px-2.5"

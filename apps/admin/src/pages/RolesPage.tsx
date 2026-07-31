@@ -18,100 +18,19 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export interface PermissionItem {
-  code: string;
-  label: string;
-  description: string;
-  category: 'Catalog' | 'Orders' | 'Customers' | 'System' | 'Analytics';
-}
+import {
+  SYSTEM_PERMISSIONS,
+  useDynamicRoles,
+  saveRoles,
+  type RoleGroup,
+  type PermissionItem,
+} from '../services/roles';
 
-export const SYSTEM_PERMISSIONS: PermissionItem[] = [
-  // Catalog & Inventory
-  { code: 'products.view', label: 'View Products', description: 'Browse and search product catalog', category: 'Catalog' },
-  { code: 'products.manage', label: 'Manage Products', description: 'Create, update, and delete products & variants', category: 'Catalog' },
-  { code: 'categories.manage', label: 'Manage Categories', description: 'Create and organize product categories', category: 'Catalog' },
-  { code: 'inventory.manage', label: 'Manage Inventory', description: 'Adjust stock levels and supplier links', category: 'Catalog' },
-
-  // Orders
-  { code: 'orders.view', label: 'View Orders', description: 'View customer orders and invoice details', category: 'Orders' },
-  { code: 'orders.manage', label: 'Manage Orders', description: 'Process order status, fulfillments, and shipping', category: 'Orders' },
-  { code: 'orders.refund', label: 'Issue Refunds', description: 'Process full and partial order refunds', category: 'Orders' },
-
-  // Customers
-  { code: 'customers.view', label: 'View Customers', description: 'Access customer directory and order history', category: 'Customers' },
-  { code: 'customers.manage', label: 'Manage Customers', description: 'Edit customer profiles and account status', category: 'Customers' },
-
-  // System & Security
-  { code: 'system.settings', label: 'Manage Settings', description: 'Configure store general settings & currency', category: 'System' },
-  { code: 'system.staff', label: 'Manage Staff', description: 'Create and edit system staff accounts', category: 'System' },
-  { code: 'system.roles', label: 'Manage Roles', description: 'Create and modify permission groups', category: 'System' },
-
-  // Analytics & Marketing
-  { code: 'analytics.view', label: 'View Analytics', description: 'Access revenue reports and sales stats', category: 'Analytics' },
-  { code: 'newsletter.manage', label: 'Manage Newsletter', description: 'Send broadcasts and export subscribers', category: 'Analytics' },
-];
-
-export interface RoleGroup {
-  id: string;
-  name: string;
-  description: string;
-  isSystem: boolean;
-  memberCount: number;
-  badgeColor: string;
-  permissions: string[];
-}
-
-const INITIAL_ROLES: RoleGroup[] = [
-  {
-    id: 'super_admin',
-    name: 'Super Administrator',
-    description: 'Full unmitigated root access to all store modules, financial data, staff, and system configurations',
-    isSystem: true,
-    memberCount: 1,
-    badgeColor: 'purple',
-    permissions: SYSTEM_PERMISSIONS.map((p) => p.code),
-  },
-  {
-    id: 'store_manager',
-    name: 'Store Manager',
-    description: 'Operational control over catalog, inventory, order processing, and customer relationship management',
-    isSystem: true,
-    memberCount: 1,
-    badgeColor: 'emerald',
-    permissions: [
-      'products.view',
-      'products.manage',
-      'categories.manage',
-      'inventory.manage',
-      'orders.view',
-      'orders.manage',
-      'customers.view',
-      'customers.manage',
-      'analytics.view',
-    ],
-  },
-  {
-    id: 'catalog_specialist',
-    name: 'Catalog & Stock Specialist',
-    description: 'Dedicated access to products, categories, media assets, and supplier inventory management',
-    isSystem: false,
-    memberCount: 0,
-    badgeColor: 'blue',
-    permissions: ['products.view', 'products.manage', 'categories.manage', 'inventory.manage'],
-  },
-  {
-    id: 'support_agent',
-    name: 'Order Support Agent',
-    description: 'Frontline support team access to search orders, inspect customer history, and issue basic updates',
-    isSystem: false,
-    memberCount: 0,
-    badgeColor: 'amber',
-    permissions: ['orders.view', 'orders.manage', 'customers.view'],
-  },
-];
+export { SYSTEM_PERMISSIONS };
+export type { RoleGroup, PermissionItem };
 
 export default function RolesPage() {
-  const [roles, setRoles] = useState<RoleGroup[]>(INITIAL_ROLES);
+  const roles = useDynamicRoles();
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleGroup | null>(null);
@@ -158,23 +77,23 @@ export default function RolesPage() {
     }
 
     if (editingRole) {
-      setRoles((prev) =>
-        prev.map((r) =>
-          r.id === editingRole.id
-            ? {
-                ...r,
-                name: roleName,
-                description: roleDesc,
-                badgeColor,
-                permissions: selectedPermissions,
-              }
-            : r
-        )
+      const updated = roles.map((r) =>
+        r.id === editingRole.id
+          ? {
+              ...r,
+              name: roleName,
+              description: roleDesc,
+              badgeColor,
+              permissions: selectedPermissions,
+            }
+          : r
       );
+      saveRoles(updated);
       toast.success(`Permission group "${roleName}" updated successfully`);
     } else {
+      const roleId = roleName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `role_${Date.now()}`;
       const newRole: RoleGroup = {
-        id: `role_${Date.now()}`,
+        id: roleId,
         name: roleName,
         description: roleDesc || 'Custom operational permission group',
         isSystem: false,
@@ -182,7 +101,7 @@ export default function RolesPage() {
         badgeColor,
         permissions: selectedPermissions,
       };
-      setRoles((prev) => [...prev, newRole]);
+      saveRoles([...roles, newRole]);
       toast.success(`Permission group "${roleName}" created successfully`);
     }
 
@@ -195,7 +114,8 @@ export default function RolesPage() {
       return;
     }
     if (confirm(`Are you sure you want to delete "${role.name}"?`)) {
-      setRoles((prev) => prev.filter((r) => r.id !== role.id));
+      const updated = roles.filter((r) => r.id !== role.id);
+      saveRoles(updated);
       toast.success(`Role group "${role.name}" removed`);
     }
   };

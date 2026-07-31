@@ -7,12 +7,13 @@ import { TableSkeleton } from '../components/ui/Spinner';
 import EmptyState from '../components/ui/EmptyState';
 import { toast } from 'sonner';
 import { ShieldCheck, UserPlus, Trash2, Edit2, ShieldAlert, Award, KeyRound, CheckCircle2 } from 'lucide-react';
+import { useDynamicRoles, getRolePermissionsList, getRoleById } from '../services/roles';
 
 interface StaffUser {
   id: number;
   name: string;
   email: string;
-  role: 'admin' | 'supplier' | 'customer';
+  role: string;
   is_active: boolean;
   created_at: string;
 }
@@ -20,35 +21,30 @@ interface StaffUser {
 async function fetchStaffUsers() {
   const { data } = await api.get('/auth/users');
   // Filter out customers — staff only
-  return (data.data as StaffUser[]).filter((u) => u.role === 'admin' || u.role === 'supplier');
+  return (data.data as StaffUser[]).filter((u) => u.role !== 'customer');
 }
 
 const emptyForm = {
   name: '',
   email: '',
   password: '',
-  role: 'admin' as 'admin' | 'supplier',
+  role: 'admin',
 };
 
-const ROLE_PERMISSIONS_MAP = {
-  admin: [
-    { label: 'Catalog & Products', scope: 'Full Access' },
-    { label: 'Orders & Refunds', scope: 'Full Access' },
-    { label: 'Inventory & Suppliers', scope: 'Full Access' },
-    { label: 'Customer Directory', scope: 'Full Access' },
-    { label: 'System Settings & Staff', scope: 'Full Access' },
-    { label: 'Roles & Permissions', scope: 'Full Access' },
-  ],
-  supplier: [
-    { label: 'Catalog & Products', scope: 'Manage Catalog' },
-    { label: 'Inventory & Stock', scope: 'Adjust Stock' },
-    { label: 'Order Processing', scope: 'View & Process' },
-    { label: 'Customer Directory', scope: 'View Only' },
-  ],
-};
+function getErrorMessage(err: any, defaultMsg: string): string {
+  const data = err.response?.data;
+  if (data?.errors && typeof data.errors === 'object') {
+    const errorDetails = Object.entries(data.errors)
+      .map(([field, msgs]) => `${field}: ${(msgs as string[]).join(', ')}`)
+      .join(' | ');
+    if (errorDetails) return errorDetails;
+  }
+  return data?.message || defaultMsg;
+}
 
 export default function StaffPage() {
   const qc = useQueryClient();
+  const availableRoles = useDynamicRoles();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<StaffUser | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -67,7 +63,7 @@ export default function StaffPage() {
       toast.success('Staff member added successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to add staff member');
+      toast.error(getErrorMessage(err, 'Failed to add staff member'));
     },
   });
 
@@ -79,7 +75,7 @@ export default function StaffPage() {
       toast.success('Staff member updated successfully');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to update staff member');
+      toast.error(getErrorMessage(err, 'Failed to update staff member'));
     },
   });
 
@@ -91,19 +87,19 @@ export default function StaffPage() {
       toast.success('Staff member removed');
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to remove staff member');
+      toast.error(getErrorMessage(err, 'Failed to remove staff member'));
     },
   });
 
   const openCreate = () => {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, role: availableRoles[0]?.id || 'admin' });
     setModalOpen(true);
   };
 
   const openEdit = (u: StaffUser) => {
     setEditing(u);
-    setForm({ name: u.name, email: u.email, password: '', role: u.role as 'admin' | 'supplier' });
+    setForm({ name: u.name, email: u.email, password: '', role: u.role });
     setModalOpen(true);
   };
 
@@ -120,10 +116,10 @@ export default function StaffPage() {
   };
 
   const totalStaff = staffList?.length ?? 0;
-  const adminCount = staffList?.filter((s) => s.role === 'admin').length ?? 0;
-  const managerCount = staffList?.filter((s) => s.role === 'supplier').length ?? 0;
+  const adminCount = staffList?.filter((s) => s.role === 'admin' || s.role === 'super_admin').length ?? 0;
+  const managerCount = staffList?.filter((s) => s.role !== 'admin' && s.role !== 'super_admin').length ?? 0;
 
-  const currentRolePermissions = ROLE_PERMISSIONS_MAP[form.role] || ROLE_PERMISSIONS_MAP.admin;
+  const currentRolePermissions = getRolePermissionsList(form.role);
 
   return (
     <div className="space-y-6">
@@ -170,7 +166,7 @@ export default function StaffPage() {
             <ShieldAlert className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Store Managers</p>
+            <p className="text-2xs font-semibold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Specialists & Managers</p>
             <p className="text-xl font-bold text-slate-900 dark:text-white mt-0.5">{managerCount}</p>
           </div>
         </div>
@@ -194,58 +190,67 @@ export default function StaffPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60 text-sm">
-                {staffList.map((staff) => (
-                  <tr key={staff.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-slate-900 dark:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center shadow-sm">
-                          {staff.name.slice(0, 2).toUpperCase()}
+                {staffList.map((staff) => {
+                  const roleObj = getRoleById(staff.role);
+                  const displayRoleName = roleObj ? roleObj.name : staff.role === 'admin' ? 'Administrator' : staff.role === 'supplier' ? 'Store Manager' : staff.role;
+
+                  return (
+                    <tr key={staff.id} className="hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors">
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-slate-900 dark:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center shadow-sm">
+                            {staff.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900 dark:text-white leading-none">{staff.name}</p>
+                            <p className="text-2xs text-slate-400 dark:text-zinc-500 mt-1">ID: #{staff.id}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-900 dark:text-white leading-none">{staff.name}</p>
-                          <p className="text-2xs text-slate-400 dark:text-zinc-500 mt-1">ID: #{staff.id}</p>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-300 font-mono text-xs">
+                        {staff.email}
+                      </td>
+
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-semibold uppercase tracking-wider ${
+                          staff.role === 'admin' || staff.role === 'super_admin'
+                            ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50'
+                            : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/50'
+                        }`}>
+                          {displayRoleName}
+                        </span>
+                      </td>
+
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => openEdit(staff)}
+                            className="btn-ghost w-7 h-7 p-0 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+                            title="Edit Staff Member"
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setDeleteId(staff.id)}
+                            className="btn-ghost w-7 h-7 p-0 rounded flex items-center justify-center text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+                            title="Remove Staff Member"
+                          >
+                            <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6l-1 14H6L5 6"/>
+                              <path d="M10 11v6M14 11v6"/>
+                              <path d="M9 6V4h6v2"/>
+                            </svg>
+                          </button>
                         </div>
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3.5 text-slate-600 dark:text-zinc-300 font-mono text-xs">
-                      {staff.email}
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-2xs font-semibold uppercase tracking-wider ${staff.role === 'admin' ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50'}`}>
-                        {staff.role === 'admin' ? 'Administrator' : 'Store Manager'}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(staff)}
-                          className="btn-ghost w-7 h-7 p-0 rounded flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
-                          title="Edit Staff Member"
-                        >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(staff.id)}
-                          className="btn-ghost w-7 h-7 p-0 rounded flex items-center justify-center text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                          title="Remove Staff Member"
-                        >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <polyline points="3 6 5 6 21 6"/>
-                            <path d="M19 6l-1 14H6L5 6"/>
-                            <path d="M10 11v6M14 11v6"/>
-                            <path d="M9 6V4h6v2"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -291,41 +296,48 @@ export default function StaffPage() {
               <input
                 type="password"
                 required={!editing}
-                placeholder="••••••••"
+                minLength={8}
+                placeholder="At least 8 characters"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
               />
+              {!editing && (
+                <p className="text-2xs text-slate-400 dark:text-zinc-500 mt-1">Must be at least 8 characters long</p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1">Assigned System Role</label>
               <select
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as any })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium"
               >
-                <option value="admin">Super Administrator (Full System Access)</option>
-                <option value="supplier">Store Manager (Catalog & Operations)</option>
+                {availableRoles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
               </select>
             </div>
 
             {/* Inherited Role Permissions Summary Card */}
-            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/40 space-y-2">
+            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/40 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5 uppercase tracking-wider">
                   <KeyRound className="w-3.5 h-3.5 text-indigo-500" />
                   Inherited Role Permissions
                 </span>
                 <span className="text-2xs font-semibold text-indigo-600 dark:text-indigo-400">
-                  {currentRolePermissions.length} Active Scopes
+                  {currentRolePermissions.length} Granted Permissions
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-1.5 pt-1">
-                {currentRolePermissions.map((perm, i) => (
-                  <div key={i} className="flex items-center gap-1.5 text-2xs text-slate-700 dark:text-zinc-300">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+              <div className="grid grid-cols-2 gap-2 pt-1 max-h-36 overflow-y-auto pr-1">
+                {currentRolePermissions.map((perm) => (
+                  <div key={perm.code} className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
                     <span className="truncate">{perm.label}</span>
                   </div>
                 ))}

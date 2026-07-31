@@ -78,6 +78,8 @@ app.get('/health', (_req, res) => {
 // All /api/v1 routes require a valid x-api-key header
 app.use('/api/v1', apiKeyMiddleware);
 
+import rolesRoutes from './modules/roles/roles.routes.js';
+
 // ── Feature Routes ────────────────────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/catalog', catalogRoutes);
@@ -88,6 +90,7 @@ app.use('/api/v1/marketing', marketingRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/discounts', discountsRoutes);
 app.use('/api/v1/cart', cartRoutes);
+app.use('/api/v1', rolesRoutes);
 
 // ── 404 + Global Error Handler ─────────────────────────────────────────────────
 app.use(notFoundHandler);

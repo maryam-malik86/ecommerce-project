@@ -6,7 +6,8 @@ import { rbac } from '../../middlewares/rbac.middleware.js';
 const router: IRouter = Router();
 const ctrl = new CatalogController();
 
-// Public catalog endpoints
+// Public / Protected Catalog Endpoints
+router.get('/suppliers', (req, res, next) => ctrl.getSuppliers(req, res, next));
 router.get('/categories', (req, res, next) => ctrl.getCategories(req, res, next));
 router.get('/products', (req, res, next) => ctrl.getProducts(req, res, next));
 router.get('/products/:id', (req, res, next) => ctrl.getProduct(req, res, next));

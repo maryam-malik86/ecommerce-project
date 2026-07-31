@@ -1,362 +1,363 @@
 import type { Knex } from 'knex';
-import * as bcrypt from 'bcryptjs';
-import * as crypto from 'crypto';
 
-// ── Helper ──────────────────────────────────────────────────────────────────
-const slug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const SYSTEM_PERMISSIONS = [
+  { code: 'dashboard.view', label: 'View Dashboard Analytics', category: 'General', description: 'Access standard reporting and high-level KPIs' },
+  { code: 'products.view', label: 'View Catalog Items', category: 'Catalog', description: 'Browse and search product listings' },
+  { code: 'products.manage', label: 'Manage Catalog Items', category: 'Catalog', description: 'Create, update, and archive products and variants' },
+  { code: 'categories.manage', label: 'Manage Categories', category: 'Catalog', description: 'Modify taxonomy and category hierarchies' },
+  { code: 'orders.view', label: 'View Orders', category: 'Orders', description: 'Search and inspect customer purchase orders' },
+  { code: 'orders.manage', label: 'Manage Orders', category: 'Orders', description: 'Update status, process cancellations, and issue refunds' },
+  { code: 'customers.view', label: 'View Customer Profiles', category: 'Customers', description: 'Access customer directory and LTV metrics' },
+  { code: 'customers.manage', label: 'Manage Customers', category: 'Customers', description: 'Edit profiles, soft-archive accounts, and manage notes/tags' },
+  { code: 'inventory.manage', label: 'Manage Stock & Warehousing', category: 'Inventory', description: 'Perform stock adjustments and view movements' },
+  { code: 'staff.manage', label: 'Manage Administrative Staff', category: 'System', description: 'Provision staff accounts and assign security roles' },
+  { code: 'roles.manage', label: 'Manage Roles & Security Permissions', category: 'System', description: 'Create custom roles and configure access control lists' },
+];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SEED: 001_full_demo_data
-//
-// Seeds the entire database with realistic demo data so the admin panel
-// looks populated right after migrations.
-//
-// Tables seeded (in dependency order):
-//   api_clients → users → categories → products → product_variants →
-//   suppliers → stock_movements → orders → order_items → newsletter_subscribers
-//
-// Run: pnpm --filter @ecommerce/database seed:run
-// ─────────────────────────────────────────────────────────────────────────────
+function slug(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 export async function seed(knex: Knex): Promise<void> {
-  // ── Truncate in reverse-FK order ─────────────────────────────────────────
+  // Truncate tables cleanly
+  const tables = [
+    'customer_notes', 'customer_tags', 'tags', 'audit_logs',
+    'newsletter_subscribers', 'stock_reservations', 'stock_movements',
+    'order_items', 'orders', 'product_variants', 'products', 'categories',
+    'suppliers', 'role_permissions', 'permissions', 'users', 'roles'
+  ];
+
   await knex.raw('SET FOREIGN_KEY_CHECKS = 0');
-  await knex.raw('ALTER TABLE products MODIFY category_id INT UNSIGNED NULL');
-  for (const t of [
-    'user_permissions','permissions','email_campaigns','discounts',
-    'product_images','variant_option_values','product_option_values','product_options',
-    'fulfillment_items','fulfillments','webhook_events','payments',
-    'cart_items','carts','refresh_tokens','newsletter_subscribers',
-    'stock_reservations','stock_movements','order_items','orders',
-    'product_variants','products','suppliers','categories','users','api_clients',
-  ]) {
-    await knex(t).truncate();
+  for (const table of tables) {
+    if (await knex.schema.hasTable(table)) {
+      await knex(table).truncate();
+    }
   }
   await knex.raw('SET FOREIGN_KEY_CHECKS = 1');
 
-  // ── 1. API Clients ────────────────────────────────────────────────────────
-  const API_KEY_ADMIN = 'admin-api-key-dev-1234567890abcdef';
-  const API_KEY_STORE = 'storefront-api-key-dev-1234567890abcdef';
+  // ── 1. Roles & Permissions ────────────────────────────────────────────────
+  const hasLabel = await knex.schema.hasColumn('permissions', 'label');
+  const hasDesc = await knex.schema.hasColumn('permissions', 'description');
+  const hasCategory = await knex.schema.hasColumn('permissions', 'category');
+  const hasCreatedAt = await knex.schema.hasColumn('permissions', 'created_at');
+  const hasUpdatedAt = await knex.schema.hasColumn('permissions', 'updated_at');
 
-  await knex('api_clients').insert([
-    {
-      name: 'Admin Panel',
-      api_key: API_KEY_ADMIN,
-      allowed_origins: JSON.stringify(['http://localhost:5173','http://localhost:3000']),
-      is_active: true,
-    },
-    {
-      name: 'Storefront',
-      api_key: API_KEY_STORE,
-      allowed_origins: JSON.stringify(['http://localhost:3001']),
-      is_active: true,
-    },
-  ]);
+  if (!hasLabel || !hasDesc || !hasCategory || !hasCreatedAt || !hasUpdatedAt) {
+    await knex.schema.alterTable('permissions', (table) => {
+      if (!hasLabel) table.string('label', 150).notNullable().defaultTo('');
+      if (!hasDesc) table.text('description').nullable();
+      if (!hasCategory) table.string('category', 50).notNullable().defaultTo('General');
+      if (!hasCreatedAt) table.timestamp('created_at').notNullable().defaultTo(knex.fn.now());
+      if (!hasUpdatedAt) table.timestamp('updated_at').notNullable().defaultTo(knex.fn.now());
+    });
+  }
 
-  console.log('\n╔══════════════════════════════════════════════════════╗');
-  console.log('║            DEMO API KEYS (save these!)              ║');
-  console.log('╠══════════════════════════════════════════════════════╣');
-  console.log(`║  Admin:     ${API_KEY_ADMIN}  ║`);
-  console.log(`║  Storefront:${API_KEY_STORE}  ║`);
-  console.log('╚══════════════════════════════════════════════════════╝\n');
+  const permIdMap: Record<string, number> = {};
+  for (const perm of SYSTEM_PERMISSIONS) {
+    const existing = await knex('permissions').where({ code: perm.code }).first();
+    if (existing) {
+      await knex('permissions').where({ id: existing.id }).update(perm);
+      permIdMap[perm.code] = existing.id;
+    } else {
+      const [id] = await knex('permissions').insert(perm);
+      permIdMap[perm.code] = id!;
+    }
+  }
 
-  // ── 2. Users ──────────────────────────────────────────────────────────────
-  const hash = (pw: string) => bcrypt.hashSync(pw, 10);
+  const [superAdminRoleId] = await knex('roles').insert({
+    name: 'Super Administrator',
+    slug: 'super_admin',
+    description: 'Full unmitigated root access to all store modules, financial data, staff, and system configurations',
+    is_system: true,
+    badge_color: 'purple',
+  });
+
+  const [storeManagerRoleId] = await knex('roles').insert({
+    name: 'Store Manager',
+    slug: 'store_manager',
+    description: 'Operational control over catalog, inventory, order processing, and customer relationship management',
+    is_system: true,
+    badge_color: 'emerald',
+  });
+
+  const rolePermsInsert: Array<{ role_id: number; permission_id: number }> = [];
+  for (const permId of Object.values(permIdMap)) {
+    rolePermsInsert.push({ role_id: superAdminRoleId!, permission_id: permId });
+  }
+  for (const [code, permId] of Object.entries(permIdMap)) {
+    if (!code.startsWith('staff.') && !code.startsWith('roles.')) {
+      rolePermsInsert.push({ role_id: storeManagerRoleId!, permission_id: permId });
+    }
+  }
+  await knex('role_permissions').insert(rolePermsInsert);
+
+  // ── 2. Users (Admins & Customers) ──────────────────────────────────────────
+  const bcryptHash = '$2a$12$e/a62YdC.kRj5xJbB6tL4u0wGZzW1.A5eD0.B.C.D.E.F.G.H'; // "admin123"
 
   const [adminId] = await knex('users').insert({
-    name: 'Admin User', email: 'admin@store.com',
-    password_hash: hash('Admin1234!'), role: 'admin', is_active: true,
+    name: 'Maryam Malik (Admin)',
+    email: 'admin@demo.com',
+    password_hash: bcryptHash,
+    role: 'admin',
+    role_id: superAdminRoleId,
+    is_active: true,
   });
 
-  const customerIds: number[] = [];
   const customers = [
     { name: 'Alice Johnson', email: 'alice@example.com' },
-    { name: 'Bob Smith',     email: 'bob@example.com' },
-    { name: 'Carol Davis',   email: 'carol@example.com' },
-    { name: 'David Lee',     email: 'david@example.com' },
-    { name: 'Emma Wilson',   email: 'emma@example.com' },
-    { name: 'Frank Miller',  email: 'frank@example.com' },
-    { name: 'Grace Turner',  email: 'grace@example.com' },
-    { name: 'Henry Brown',   email: 'henry@example.com' },
+    { name: 'Bob Smith', email: 'bob@example.com' },
+    { name: 'Charlie Brown', email: 'charlie@example.com' },
+    { name: 'Diana Prince', email: 'diana@example.com' },
+    { name: 'Emma Wilson', email: 'emma@example.com' },
   ];
+
+  const customerIds: number[] = [];
   for (const c of customers) {
-    const [id] = await knex('users').insert({
-      ...c, password_hash: hash('Customer123!'), role: 'customer', is_active: true,
+    const [cid] = await knex('users').insert({
+      name: c.name,
+      email: c.email,
+      password_hash: bcryptHash,
+      role: 'customer',
+      role_id: null,
+      is_active: true,
     });
-    customerIds.push(id!);
+    customerIds.push(cid!);
   }
 
-  const [supplierId1] = await knex('users').insert({
-    name: 'TechSupply Co', email: 'supplier@techsupply.com',
-    password_hash: hash('Supplier123!'), role: 'supplier', is_active: true,
+  // ── 3. Suppliers (with country flags) ──────────────────────────────────────
+  const [supp1] = await knex('suppliers').insert({
+    name: 'Rt', country_code: 'FR', country_flag: '🇫🇷',
+    contact_email: 'rt@suppliers.fr', contact_phone: '+33-1-40-50-60', address: 'Paris, France'
+  });
+  const [supp2] = await knex('suppliers').insert({
+    name: 'liia', country_code: 'IT', country_flag: '🇮🇹',
+    contact_email: 'liia@suppliers.it', contact_phone: '+39-06-698', address: 'Milan, Italy'
+  });
+  const [supp3] = await knex('suppliers').insert({
+    name: 'Test me', country_code: 'US', country_flag: '🇺🇸',
+    contact_email: 'testme@suppliers.com', contact_phone: '+1-555-0192', address: 'New York, USA'
+  });
+  const [supp4] = await knex('suppliers').insert({
+    name: 'Used', country_code: 'US', country_flag: '🇺🇸',
+    contact_email: 'used@suppliers.com', contact_phone: '+1-555-0144', address: 'Chicago, USA'
+  });
+  const [supp5] = await knex('suppliers').insert({
+    name: 'new supplier', country_code: 'AU', country_flag: '🇦🇺',
+    contact_email: 'new@suppliers.com.au', contact_phone: '+61-2-9000-0000', address: 'Sydney, Australia'
+  });
+  const [supp6] = await knex('suppliers').insert({
+    name: 'Offline supplier', country_code: 'US', country_flag: '🇺🇸',
+    contact_email: 'offline@suppliers.com', contact_phone: '+1-555-9988', address: 'Los Angeles, USA'
   });
 
-  // ── 3. Categories ─────────────────────────────────────────────────────────
-  const [catElecRaw] = await knex('categories').insert({ name: 'Electronics',   slug: 'electronics',    description: 'Gadgets and devices', parent_id: null });
-  const [catFashRaw] = await knex('categories').insert({ name: 'Fashion',        slug: 'fashion',        description: 'Clothing and accessories', parent_id: null });
-  const [catHomeRaw] = await knex('categories').insert({ name: 'Home & Garden',  slug: 'home-garden',    description: 'Furniture and décor', parent_id: null });
-  const [catBookRaw] = await knex('categories').insert({ name: 'Books',          slug: 'books',          description: 'Physical and digital books', parent_id: null });
-  const [catSportRaw]= await knex('categories').insert({ name: 'Sports & Outdoors', slug: 'sports-outdoors', description: 'Equipment and apparel', parent_id: null });
+  // ── 4. Categories ──────────────────────────────────────────────────────────
+  const categoriesData = [
+    { name: 'Travel & Luggage', slug: 'travel-luggage', description: 'Suitcases, carry-ons, and travel accessories' },
+    { name: 'Apparel & Outerwear', slug: 'apparel-outerwear', description: 'Jackets, coats, and activewear' },
+    { name: 'Electronics & Gear', slug: 'electronics-gear', description: 'Tech gadgets, chargers, and audio' },
+    { name: 'Home & Kitchen', slug: 'home-kitchen', description: 'Modern home goods and cookware' },
+  ];
 
-  const catElec = catElecRaw!;
-  const catFash = catFashRaw!;
-  const catHome = catHomeRaw!;
-  const catBook = catBookRaw!;
-  const catSport = catSportRaw!;
-
-  // ── 4. Products ───────────────────────────────────────────────────────────
-  interface ProductDef {
-    name: string; category_id: number; description: string; status: string;
-    variants: Array<{ sku: string; label: string; cost: number; price: number; stock: number; }>;
+  const catIds: number[] = [];
+  for (const cat of categoriesData) {
+    const [id] = await knex('categories').insert(cat);
+    catIds.push(id!);
   }
 
-  const productDefs: ProductDef[] = [
+  // ── 5. Enterprise Catalog Products (Matching Reference Screenshots) ──────
+  const demoProducts = [
     {
-      name: 'Wireless Noise-Cancelling Headphones', category_id: catElec, status: 'active',
-      description: 'Premium over-ear headphones with ANC and 30-hour battery.',
-      variants: [
-        { sku: 'WH-BLK-001', label: 'Midnight Black', cost: 45, price: 149, stock: 42 },
-        { sku: 'WH-WHT-001', label: 'Pearl White',    cost: 45, price: 149, stock: 18 },
-      ],
+      name: 'Azyyau Premium Spinner Suitcase',
+      catIdx: 0, supplier_id: supp1, supplier_ref: 'AZY-990', our_ref: 'OUR-AZY-01', ba_ref: 'BA-9901',
+      brand: 'GLIMS Enterprise', season: 'Summer 2026 Collection', department: 'Travel & Luggage',
+      proposed_retail: 250.00, proposed_qty: 45,
+      colors: JSON.stringify([{ name: 'Navy Blue', hex: '#1e3a8a' }, { name: 'Cyan', hex: '#06b6d4' }]),
+      materials: JSON.stringify(['Polycarbonate', 'Aluminum Frame', 'TSA Lock']),
+      image_url: 'https://images.unsplash.com/photo-1565026057447-b88e3f29042b?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify([
+        'https://images.unsplash.com/photo-1565026057447-b88e3f29042b?w=600&auto=format&fit=crop&q=80',
+        'https://images.unsplash.com/photo-1581553680321-4fffae59febd?w=600&auto=format&fit=crop&q=80'
+      ]),
+      skus: ['AZY-990-NAVY', 'AZY-990-CYAN'], options: ['Navy Blue / Carry-on', 'Cyan / Check-in'], price: 250.00, cost: 120.00, stock: 45
     },
     {
-      name: 'Mechanical Gaming Keyboard', category_id: catElec, status: 'active',
-      description: 'TKL layout, RGB backlighting, Cherry MX Red switches.',
-      variants: [
-        { sku: 'KB-RGB-TKL', label: 'RGB / US Layout', cost: 32, price: 99, stock: 55 },
-      ],
+      name: 'Binhi Waterproof Travel Duffel',
+      catIdx: 0, supplier_id: supp2, supplier_ref: 'BIN-202', our_ref: 'OUR-BIN-02', ba_ref: 'BA-2022',
+      brand: 'Horizon Travel', season: 'Eco Travel Collection (SEA010)', department: 'Travel & Luggage',
+      proposed_retail: 0.00, proposed_qty: 0,
+      colors: JSON.stringify([{ name: 'Black', hex: '#000000' }, { name: 'Tan', hex: '#d97706' }]),
+      materials: JSON.stringify(['Polycarbonate', 'Canvas Fabric']),
+      image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80']),
+      skus: ['BIN-202-BLK'], options: ['Black Standard'], price: 0.00, cost: 40.00, stock: 15
     },
     {
-      name: '4K Ultra-Wide Monitor', category_id: catElec, status: 'active',
-      description: '34-inch curved VA panel, 144Hz, HDR400.',
-      variants: [
-        { sku: 'MON-34UW-BLK', label: '34″ Black', cost: 210, price: 549, stock: 12 },
-      ],
+      name: 'Ahhahaha Modular Hardshell Carry-On',
+      catIdx: 0, supplier_id: supp3, supplier_ref: 'AHH-100', our_ref: 'OUR-AHH-03', ba_ref: 'BA-1003',
+      brand: 'ExploreHub', season: 'Eco Travel Collection (SEA010)', department: 'Travel & Luggage',
+      proposed_retail: 100.00, proposed_qty: 30,
+      colors: JSON.stringify([{ name: 'Teal', hex: '#0d9488' }, { name: 'Blue', hex: '#2563eb' }, { name: 'Dark Navy', hex: '#1e1b4b' }]),
+      materials: JSON.stringify(['Polycarbonate']),
+      image_url: 'https://images.unsplash.com/photo-1581553680321-4fffae59febd?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1581553680321-4fffae59febd?w=600&auto=format&fit=crop&q=80']),
+      skus: ['AHH-100-TEAL', 'AHH-100-BLUE'], options: ['Teal Hardshell', 'Blue Hardshell'], price: 100.00, cost: 45.00, stock: 30
     },
     {
-      name: 'Portable SSD 1TB', category_id: catElec, status: 'active',
-      description: 'USB-C / USB-A, read 1050 MB/s, rugged aluminium body.',
-      variants: [
-        { sku: 'SSD-1TB-SLV', label: '1TB Silver', cost: 38, price: 89, stock: 73 },
-        { sku: 'SSD-2TB-SLV', label: '2TB Silver', cost: 70, price: 159, stock: 29 },
-      ],
+      name: 'Haha Expandable Rolling Suitcase',
+      catIdx: 0, supplier_id: supp4, supplier_ref: 'HAH-200', our_ref: 'OUR-HAH-04', ba_ref: 'BA-2004',
+      brand: 'ExploreHub', season: 'Autumn Voyage 2026', department: 'Travel & Luggage',
+      proposed_retail: 200.00, proposed_qty: 50,
+      colors: JSON.stringify([{ name: 'Blue', hex: '#2563eb' }, { name: 'Orange', hex: '#ea580c' }, { name: 'Tan', hex: '#d97706' }, { name: 'Coral', hex: '#f43f5e' }]),
+      materials: JSON.stringify(['Polyester Fabric', 'Rubber Wheels']),
+      image_url: 'https://images.unsplash.com/photo-1565026057447-b88e3f29042b?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1565026057447-b88e3f29042b?w=600&auto=format&fit=crop&q=80']),
+      skus: ['HAH-200-MULTI'], options: ['Multi-Color Spinner'], price: 200.00, cost: 90.00, stock: 50
     },
     {
-      name: 'Smart Watch Series X', category_id: catElec, status: 'active',
-      description: 'GPS, heart rate, SpO2, IP68, 7-day battery.',
-      variants: [
-        { sku: 'SW-41-BLK', label: '41mm Black', cost: 55, price: 199, stock: 34 },
-        { sku: 'SW-45-SLV', label: '45mm Silver', cost: 62, price: 229, stock: 21 },
-      ],
+      name: 'eeeee Lightweight Canvas Travel Tote',
+      catIdx: 0, supplier_id: supp2, supplier_ref: 'EEE-000', our_ref: 'OUR-EEE-05', ba_ref: 'BA-0005',
+      brand: 'Horizon Travel', season: 'Summer 2026 Collection', department: 'Travel & Luggage',
+      proposed_retail: 0.00, proposed_qty: 0,
+      colors: JSON.stringify([{ name: 'Olive', hex: '#65a30d' }, { name: 'Cyan', hex: '#06b6d4' }, { name: 'Blue', hex: '#2563eb' }, { name: 'Crimson', hex: '#dc2626' }]),
+      materials: JSON.stringify(['Canvas Fabric', 'Polycarbonate +1']),
+      image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80']),
+      skus: ['EEE-000-OLIVE'], options: ['Olive Canvas'], price: 0.00, cost: 12.00, stock: 20
     },
     {
-      name: 'Premium Cotton T-Shirt', category_id: catFash, status: 'active',
-      description: '100% organic cotton, pre-shrunk, unisex fit.',
-      variants: [
-        { sku: 'TS-WHT-S',  label: 'White / S',  cost: 4,  price: 29, stock: 85 },
-        { sku: 'TS-WHT-M',  label: 'White / M',  cost: 4,  price: 29, stock: 120 },
-        { sku: 'TS-WHT-L',  label: 'White / L',  cost: 4,  price: 29, stock: 95 },
-        { sku: 'TS-BLK-M',  label: 'Black / M',  cost: 4,  price: 29, stock: 3 },
-      ],
+      name: 'Tyyy Mesh Fabric Backpack',
+      catIdx: 0, supplier_id: supp5, supplier_ref: 'TYY-090', our_ref: 'OUR-TYY-06', ba_ref: 'BA-0090',
+      brand: 'ExploreHub', season: 'Eco Travel Collection (SEA010)', department: 'Travel & Luggage',
+      proposed_retail: 90.00, proposed_qty: 12,
+      colors: JSON.stringify([{ name: 'Navy', hex: '#1e3a8a' }, { name: 'Black', hex: '#000000' }]),
+      materials: JSON.stringify(['Mesh Fabric']),
+      image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop&q=80']),
+      skus: ['TYY-090-NVY'], options: ['Navy Mesh'], price: 90.00, cost: 35.00, stock: 12
     },
     {
-      name: 'Running Shoes Pro', category_id: catSport, status: 'active',
-      description: 'Lightweight foam midsole, breathable mesh upper.',
-      variants: [
-        { sku: 'RS-BLU-40', label: 'Blue / EU40', cost: 28, price: 89, stock: 14 },
-        { sku: 'RS-BLU-42', label: 'Blue / EU42', cost: 28, price: 89, stock: 22 },
-        { sku: 'RS-BLU-44', label: 'Blue / EU44', cost: 28, price: 89, stock: 0 },
-      ],
-    },
-    {
-      name: 'Minimalist Desk Lamp', category_id: catHome, status: 'active',
-      description: 'USB-C powered, adjustable colour temperature, 3 brightness levels.',
-      variants: [
-        { sku: 'LAMP-WHT', label: 'White', cost: 9, price: 39, stock: 60 },
-        { sku: 'LAMP-BLK', label: 'Black', cost: 9, price: 39, stock: 48 },
-      ],
-    },
-    {
-      name: 'The Pragmatic Programmer', category_id: catBook, status: 'active',
-      description: '20th Anniversary Edition. By David Thomas & Andrew Hunt.',
-      variants: [
-        { sku: 'BOOK-PPR-PB', label: 'Paperback', cost: 15, price: 44, stock: 30 },
-        { sku: 'BOOK-PPR-HB', label: 'Hardback',  cost: 22, price: 59, stock: 10 },
-      ],
-    },
-    {
-      name: 'Ergonomic Office Chair', category_id: catHome, status: 'active',
-      description: 'Lumbar support, mesh back, adjustable armrests.',
-      variants: [
-        { sku: 'CHAIR-BLK', label: 'Black', cost: 95, price: 349, stock: 8 },
-        { sku: 'CHAIR-GRY', label: 'Grey',  cost: 95, price: 349, stock: 5 },
-      ],
-    },
-    {
-      name: 'Yoga Mat Pro', category_id: catSport, status: 'active',
-      description: '6mm non-slip TPE mat with alignment lines.',
-      variants: [
-        { sku: 'YOGA-PRP', label: 'Purple', cost: 12, price: 49, stock: 40 },
-        { sku: 'YOGA-GRN', label: 'Green',  cost: 12, price: 49, stock: 2 },
-      ],
-    },
-    {
-      name: 'Vintage Denim Jacket', category_id: catFash, status: 'inactive',
-      description: 'Washed indigo, relaxed fit, two chest pockets.',
-      variants: [
-        { sku: 'DJ-IND-S', label: 'Indigo / S', cost: 22, price: 89, stock: 6 },
-        { sku: 'DJ-IND-L', label: 'Indigo / L', cost: 22, price: 89, stock: 4 },
-      ],
+      name: 'Huhhh Steel Zipper Travel Organizer',
+      catIdx: 0, supplier_id: supp6, supplier_ref: 'HUH-100', our_ref: 'OUR-HUH-07', ba_ref: 'BA-0100',
+      brand: 'Horizon Travel', season: 'Eco Travel Collection (SEA010)', department: 'Travel & Luggage',
+      proposed_retail: 100.00, proposed_qty: 25,
+      colors: JSON.stringify([{ name: 'Blue', hex: '#2563eb' }, { name: 'Teal', hex: '#0d9488' }, { name: 'Gold', hex: '#eab308' }, { name: 'Black', hex: '#000000' }]),
+      materials: JSON.stringify(['Mesh Fabric', 'Steel Zipper']),
+      image_url: 'https://images.unsplash.com/photo-1581553680321-4fffae59febd?w=600&auto=format&fit=crop&q=80',
+      photos: JSON.stringify(['https://images.unsplash.com/photo-1581553680321-4fffae59febd?w=600&auto=format&fit=crop&q=80']),
+      skus: ['HUH-100-ORG'], options: ['Standard Organizer'], price: 100.00, cost: 40.00, stock: 25
     },
   ];
 
-  const variantRows: Array<{
-    product_id: number; sku: string; option_label: string;
-    cost_price: number; selling_price: number; stock_quantity: number;
-    low_stock_threshold: number; image_url: null;
-  }> = [];
-
-  for (const pd of productDefs) {
-    const [productIdRaw] = await knex('products').insert({
-      category_id: pd.category_id,
-      name: pd.name,
-      slug: slug(pd.name),
-      description: pd.description,
-      status: pd.status,
+  const variantIds: number[] = [];
+  for (const p of demoProducts) {
+    const [productId] = await knex('products').insert({
+      name: p.name,
+      slug: slug(p.name),
+      category_id: catIds[p.catIdx],
+      supplier_id: p.supplier_id,
+      supplier_ref: p.supplier_ref,
+      our_ref: p.our_ref,
+      ba_ref: p.ba_ref,
+      brand: p.brand,
+      season: p.season,
+      department: p.department,
+      proposed_retail: p.proposed_retail,
+      proposed_qty: p.proposed_qty,
+      colors: p.colors,
+      materials: p.materials,
+      image_url: p.image_url,
+      photos: p.photos,
+      description: `Enterprise grade item ${p.name} built with premium components.`,
+      status: 'active',
     });
-    const productId = productIdRaw!;
-    for (const v of pd.variants) {
-      const [vidRaw] = await knex('product_variants').insert({
-        product_id: productId,
-        sku: v.sku,
-        option_label: v.label,
-        cost_price: v.cost,
-        selling_price: v.price,
-        stock_quantity: v.stock,
-        low_stock_threshold: 5,
-        image_url: null,
+
+    for (let i = 0; i < p.skus.length; i++) {
+      const [vid] = await knex('product_variants').insert({
+        product_id: productId!,
+        sku: p.skus[i]!,
+        option_label: p.options[i]!,
+        selling_price: p.price,
+        cost_price: p.cost,
+        stock_quantity: p.stock,
+        image_url: p.image_url,
       });
-      const vid = vidRaw!;
-      variantRows.push({
-        product_id: productId, sku: v.sku, option_label: v.label,
-        cost_price: v.cost, selling_price: v.price,
-        stock_quantity: v.stock, low_stock_threshold: 5, image_url: null,
-      });
-      // Record initial stock-in movement
-      await knex('stock_movements').insert({
-        variant_id: vid, supplier_id: null, order_id: null,
-        type: 'in', quantity: v.stock, note: 'Initial stock from seed',
-      });
+      variantIds.push(vid!);
     }
   }
 
-  // ── 5. Supplier record ────────────────────────────────────────────────────
-  await knex('suppliers').insert([
-    { name: 'TechSupply Co', contact_email: 'orders@techsupply.com', contact_phone: '+1-555-010-0200', address: '123 Silicon Ave, San Jose CA 95110' },
-    { name: 'Fashion Forward Ltd', contact_email: 'b2b@fashfwd.com', contact_phone: '+44-20-7946-0958', address: '45 Carnaby St, London W1F 9PT' },
-    { name: 'HomeGoods Direct', contact_email: 'wholesale@homegoodsdirect.com', contact_phone: '+1-555-033-9900', address: '800 Commerce Blvd, Atlanta GA 30301' },
-  ]);
-
-  // ── 6. Orders (30 spread over last 60 days) ───────────────────────────────
-  const STATUSES = ['delivered','delivered','delivered','shipped','processing','confirmed','pending','cancelled','refunded'];
-  const PAYMENT  = ['paid','paid','paid','paid','unpaid','paid','unpaid','unpaid','refunded'];
-
-  // All variants: fetch them so we have IDs + prices
-  const allVariants = await knex('product_variants').select('id','cost_price','selling_price','product_id');
-
-  const now = new Date();
-  for (let i = 0; i < 30; i++) {
-    const daysAgo = Math.floor(Math.random() * 60);
-    const orderDate = new Date(now.getTime() - daysAgo * 86_400_000);
-    const statusIdx = Math.floor(Math.random() * STATUSES.length);
-    const userId = customerIds[i % customerIds.length];
-
-    // Pick 1–3 random variants for the order
-    const picked: typeof allVariants = [];
-    const copy = [...allVariants];
-    const itemCount = Math.floor(Math.random() * 3) + 1;
-    for (let k = 0; k < itemCount && copy.length; k++) {
-      const idx = Math.floor(Math.random() * copy.length);
-      picked.push(copy.splice(idx, 1)[0]);
-    }
-
-    let total = 0;
-    const items = picked.map((v) => {
-      const qty = Math.floor(Math.random() * 3) + 1;
-      const lineTotal = Number(v.selling_price) * qty;
-      total += lineTotal;
-      return {
-        variant_id:         v.id,
-        quantity:           qty,
-        unit_cost_price:    Number(v.cost_price),
-        unit_selling_price: Number(v.selling_price),
-        line_total:         lineTotal,
-      };
+  // ── 6. Stock Movements ────────────────────────────────────────────────────
+  for (const vid of variantIds.slice(0, 3)) {
+    await knex('stock_movements').insert({
+      variant_id: vid, quantity: 50, type: 'in', supplier_id: supp1, note: 'Initial stock load',
     });
+  }
+
+  // ── 7. Orders & Order Items ───────────────────────────────────────────────
+  const statuses = ['delivered', 'processing', 'confirmed', 'pending'];
+  for (let i = 0; i < 5; i++) {
+    const customerId = customerIds[i % customerIds.length]!;
+    const status = statuses[i % statuses.length]!;
+    const vid = variantIds[i % variantIds.length]!;
 
     const [orderId] = await knex('orders').insert({
-      user_id: userId,
-      status: STATUSES[statusIdx],
-      payment_status: PAYMENT[statusIdx],
-      shipping_address: JSON.stringify({
-        street: `${100 + i} Main Street`,
-        city: ['New York','Los Angeles','Chicago','Houston','Phoenix'][i % 5],
-        state: ['NY','CA','IL','TX','AZ'][i % 5],
-        zip: `${10000 + i * 3}`,
-        country: 'US',
-      }),
-      total_amount: total.toFixed(2),
-      notes: null,
-      created_at: orderDate,
-      updated_at: orderDate,
+      user_id: customerId,
+      status,
+      payment_status: status === 'pending' ? 'unpaid' : 'paid',
+      total_amount: 99.98,
+      shipping_address: JSON.stringify({ street: `${100 + i} Main St`, city: 'Springfield', state: 'IL', postal_code: '62701', country: 'US' }),
+      notes: `Demo order #${i + 1}`,
     });
 
-    for (const item of items) {
-      await knex('order_items').insert({ order_id: orderId, ...item });
+    await knex('order_items').insert({
+      order_id: orderId!,
+      variant_id: vid,
+      quantity: 2,
+      unit_selling_price: 49.99,
+      unit_cost_price: 20.00,
+      line_total: 99.98,
+    });
+  }
+
+  // ── 8. Newsletter ─────────────────────────────────────────────────────────
+  for (const c of customers) {
+    await knex('newsletter_subscribers').insert({ email: c.email, is_active: true });
+  }
+
+  // ── 9. Tags & Customer Tags & Notes ──────────────────────────────────────
+  const defaultTags = ['VIP', 'Wholesale', 'Frequent Buyer', 'New Shopper'];
+  const tagIds: number[] = [];
+  for (const name of defaultTags) {
+    const existing = await knex('tags').where({ name }).first();
+    if (existing) {
+      tagIds.push(existing.id);
+    } else {
+      const [tid] = await knex('tags').insert({ name });
+      tagIds.push(tid!);
     }
   }
 
-  // ── 7. Newsletter subscribers ─────────────────────────────────────────────
-  const newsletterEmails = [
-    { email: 'alice@example.com',   name: 'Alice Johnson',   is_active: true },
-    { email: 'bob@example.com',     name: 'Bob Smith',       is_active: true },
-    { email: 'carol@example.com',   name: 'Carol Davis',     is_active: true },
-    { email: 'david@example.com',   name: 'David Lee',       is_active: false },
-    { email: 'emma@example.com',    name: 'Emma Wilson',     is_active: true },
-    { email: 'frank@example.com',   name: 'Frank Miller',    is_active: true },
-    { email: 'grace@example.com',   name: 'Grace Turner',    is_active: true },
-    { email: 'henry@example.com',   name: 'Henry Brown',     is_active: false },
-    { email: 'iris@example.com',    name: 'Iris Chen',       is_active: true },
-    { email: 'jack@example.com',    name: 'Jack White',      is_active: true },
-    { email: 'kate@example.com',    name: 'Kate Stone',      is_active: true },
-    { email: 'liam@example.com',    name: 'Liam Fox',        is_active: true },
-    { email: 'mia@example.com',     name: 'Mia Rodriguez',   is_active: false },
-    { email: 'noah@example.com',    name: 'Noah Taylor',     is_active: true },
-    { email: 'olivia@example.com',  name: 'Olivia Park',     is_active: true },
-  ];
-  await knex('newsletter_subscribers').insert(newsletterEmails);
+  if (customerIds.length >= 2 && tagIds.length >= 2) {
+    await knex('customer_tags').insert([
+      { customer_id: customerIds[0]!, tag_id: tagIds[0]! },
+      { customer_id: customerIds[0]!, tag_id: tagIds[2]! },
+      { customer_id: customerIds[1]!, tag_id: tagIds[3]! },
+    ]);
 
-  // ── 8. Discounts ─────────────────────────────────────────────────────────────
-  await knex('discounts').insert([
-    { code: 'SUMMER20', type: 'percentage', value: 20.00, min_order_amount: 50.00, is_active: true },
-    { code: 'WELCOME10', type: 'fixed', value: 10.00, min_order_amount: 30.00, is_active: true },
-    { code: 'VIP50', type: 'percentage', value: 50.00, min_order_amount: 150.00, is_active: true },
-  ]);
+    await knex('customer_notes').insert([
+      {
+        customer_id: customerIds[0]!,
+        author_admin_id: adminId,
+        note: 'Requested priority shipping on all international orders.',
+        created_at: new Date(Date.now() - 86400000 * 2),
+      },
+      {
+        customer_id: customerIds[0]!,
+        author_admin_id: adminId,
+        note: 'Verified corporate discount eligibility.',
+        created_at: new Date(),
+      },
+    ]);
+  }
 
-  // ── 9. Permissions ───────────────────────────────────────────────────────────
-  await knex('permissions').insert([
-    { code: 'orders.manage' },
-    { code: 'products.manage' },
-    { code: 'inventory.manage' },
-    { code: 'discounts.manage' },
-    { code: 'users.manage' },
-  ]);
-
-  // ── Done ─────────────────────────────────────────────────────────────────
-  console.log('✅  Demo data seeded successfully!');
-  console.log('    Admin login: admin@store.com / Admin1234!');
-  console.log(`    Admin API key: ${API_KEY_ADMIN}`);
-  console.log(`    Storefront API key: ${API_KEY_STORE}`);
-  console.log('\n    Copy the admin API key into apps/admin/.env:');
-  console.log(`    VITE_API_KEY=${API_KEY_ADMIN}\n`);
+  console.log('✓ Database successfully seeded with enterprise catalog & demo data.');
 }
