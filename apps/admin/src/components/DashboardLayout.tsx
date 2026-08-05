@@ -22,12 +22,13 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Bell,
+  Layers,
 } from 'lucide-react';
 
 const mainNavLinks = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { to: '/products', label: 'Products', Icon: Package },
-  { to: '/categories', label: 'Categories', Icon: FolderTree },
+  { to: '/categories', label: 'Collections', Icon: Layers },
   { to: '/orders', label: 'Orders', Icon: ShoppingBag },
   { to: '/inventory', label: 'Inventory', Icon: Warehouse },
   { to: '/analytics', label: 'Analytics', Icon: BarChart3 },
@@ -96,13 +97,12 @@ export default function DashboardLayout() {
 
       {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-30 flex flex-col border-r transition-all duration-200 ease-in-out
+        className={`fixed lg:sticky top-0 h-screen z-30 flex flex-col border-r transition-all duration-200 ease-in-out flex-shrink-0
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
                     ${isCollapsed ? 'w-16 min-w-[4rem] max-w-[4rem]' : 'w-60 min-w-[15rem] max-w-[15rem]'}`}
         style={{
           background: 'var(--ui-bg-base)',
           borderColor: 'var(--ui-border-base)',
-          flexShrink: 0,
         }}
       >
         {/* Logo Header */}
@@ -395,7 +395,7 @@ export default function DashboardLayout() {
         </header>
 
         {/* Content Body */}
-        <main className="flex-1 overflow-y-auto p-6 pb-16">
+        <main className="flex-1 overflow-y-auto min-h-0 p-6 pb-16">
           <Outlet />
         </main>
       </div>

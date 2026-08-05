@@ -34,6 +34,35 @@ export function notFoundHandler(req: Request, res: Response): void {
   });
 }
 
+function sanitizeErrorMessage(rawMsg: string): string {
+  if (!rawMsg) return 'An unexpected error occurred';
+
+  if (rawMsg.includes('ER_DATA_TOO_LONG') || rawMsg.includes('Data too long')) {
+    return 'The image or field data is too large for the database column.';
+  }
+
+  if (rawMsg.includes('ER_DUP_ENTRY') || rawMsg.includes('Duplicate entry')) {
+    const match = rawMsg.match(/Duplicate entry '(.*?)'/);
+    return match ? `Duplicate entry for '${match[1]}'` : 'An item with this unique key already exists.';
+  }
+
+  // Strip out raw SQL queries and base64 strings
+  if (rawMsg.toLowerCase().startsWith('update ') || rawMsg.toLowerCase().startsWith('insert ') || rawMsg.toLowerCase().startsWith('select ')) {
+    const sqlErrorSplit = rawMsg.split(/ - (ER_[A-Z_]+|SQLITE_[A-Z_]+):/);
+    const lastPart = sqlErrorSplit[sqlErrorSplit.length - 1];
+    if (lastPart) {
+      return `Database Error: ${lastPart.trim()}`;
+    }
+    return 'Database update error. Please check image size and field lengths.';
+  }
+
+  if (rawMsg.length > 250) {
+    return rawMsg.slice(0, 250) + '...';
+  }
+
+  return rawMsg;
+}
+
 // ── Global Error Handler ──────────────────────────────────────────────────────
 // Must have 4 parameters to be recognised as an error handler by Express.
 
@@ -50,7 +79,7 @@ export const errorHandler: ErrorRequestHandler = (
     err.errors.forEach((e) => {
       const key = e.path.join('.') || 'unknown';
       if (!fieldErrors[key]) fieldErrors[key] = [];
-      fieldErrors[key]!.push(e.message);
+      (fieldErrors[key] as string[]).push(e.message);
     });
 
     res.status(422).json({
@@ -72,11 +101,12 @@ export const errorHandler: ErrorRequestHandler = (
   }
 
   // Unknown / unexpected errors
-  const message =
+  const rawMessage =
     err instanceof Error ? err.message : 'An unexpected error occurred';
+  const cleanMessage = sanitizeErrorMessage(rawMessage);
 
   logger.error('Unhandled error', {
-    error: message,
+    error: rawMessage,
     stack: err instanceof Error ? err.stack : undefined,
     path: req.path,
     method: req.method,
@@ -84,7 +114,7 @@ export const errorHandler: ErrorRequestHandler = (
 
   res.status(500).json({
     success: false,
-    message: 'Internal server error',
+    message: cleanMessage,
     ...(env.NODE_ENV === 'development' && err instanceof Error
       ? { stack: err.stack }
       : {}),

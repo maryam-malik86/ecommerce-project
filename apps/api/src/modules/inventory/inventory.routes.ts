@@ -12,6 +12,7 @@ router.use(jwtAuthMiddleware);
 // Admin + supplier can read suppliers
 router.get('/suppliers', rbac('admin', 'supplier'), (req, res, next) => ctrl.getSuppliers(req, res, next));
 router.post('/suppliers', rbac('admin'), (req, res, next) => ctrl.createSupplier(req, res, next));
+router.put('/suppliers/:id', rbac('admin'), (req, res, next) => ctrl.updateSupplier(req, res, next));
 router.patch('/suppliers/:id', rbac('admin'), (req, res, next) => ctrl.updateSupplier(req, res, next));
 router.delete('/suppliers/:id', rbac('admin'), (req, res, next) => ctrl.deleteSupplier(req, res, next));
 

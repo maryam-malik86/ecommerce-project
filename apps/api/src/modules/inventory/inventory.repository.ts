@@ -68,7 +68,6 @@ export class InventoryRepository {
       .select(
         'product_variants.id as variant_id',
         'product_variants.sku',
-        'product_variants.option_label',
         'products.name as product_name',
         'product_variants.stock_quantity',
         'product_variants.low_stock_threshold',
