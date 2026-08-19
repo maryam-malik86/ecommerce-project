@@ -12,6 +12,7 @@ const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'));
 const CategoriesPage = lazy(() => import('./pages/CategoriesPage'));
 const OrdersPage = lazy(() => import('./pages/OrdersPage'));
 const OrderDetailPage = lazy(() => import('./pages/OrderDetailPage'));
+const OrderInquiriesPage = lazy(() => import('./pages/OrderInquiriesPage'));
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const NewsletterPage = lazy(() => import('./pages/NewsletterPage'));
@@ -20,6 +21,7 @@ const CustomerDetailPage = lazy(() => import('./pages/CustomerDetailPage'));
 const StaffPage = lazy(() => import('./pages/StaffPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 
 function PageLoader() {
@@ -49,16 +51,21 @@ export default function App() {
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="orders" element={<OrdersPage />} />
               <Route path="orders/:id" element={<OrderDetailPage />} />
+              <Route path="inquiries" element={<OrderInquiriesPage />} />
+              <Route path="orders/inquiries" element={<Navigate to="/inquiries" replace />} />
               <Route path="inventory" element={<InventoryPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
+
               <Route path="newsletter" element={<NewsletterPage />} />
               <Route path="customers" element={<CustomersPage />} />
               <Route path="customers/:id" element={<CustomerDetailPage />} />
               <Route path="users" element={<Navigate to="/customers" replace />} />
               <Route path="system/staff" element={<StaffPage />} />
               <Route path="system/roles" element={<RolesPage />} />
+              <Route path="system/email-templates" element={<EmailTemplatesPage />} />
               <Route path="system/settings" element={<SettingsPage />} />
               <Route path="settings" element={<Navigate to="/system/settings" replace />} />
+
             </Route>
           </Routes>
         </Suspense>

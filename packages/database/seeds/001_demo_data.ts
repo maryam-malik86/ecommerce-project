@@ -23,7 +23,7 @@ export async function seed(knex: Knex): Promise<void> {
   const tables = [
     'customer_notes', 'customer_tags', 'tags', 'audit_logs',
     'newsletter_subscribers', 'stock_reservations', 'stock_movements',
-    'order_items', 'orders', 'product_variants', 'products', 'categories',
+    'order_items', 'orders', 'product_variants', 'product_categories', 'products', 'categories',
     'suppliers', 'role_permissions', 'permissions', 'users', 'roles'
   ];
 
@@ -92,9 +92,18 @@ export async function seed(knex: Knex): Promise<void> {
   await knex('role_permissions').insert(rolePermsInsert);
 
   // ── 2. Users (Admins & Customers) ──────────────────────────────────────────
-  const bcryptHash = '$2a$12$e/a62YdC.kRj5xJbB6tL4u0wGZzW1.A5eD0.B.C.D.E.F.G.H'; // "admin123"
+  const bcryptHash = '$2a$10$yMdxpLXIn8np49Bdy.Loa.WMrWV5f4.zl67kf27pYbREcmT7y63m2'; // "Admin1234!"
 
   const [adminId] = await knex('users').insert({
+    name: 'StoreCo Admin',
+    email: 'admin@store.com',
+    password_hash: bcryptHash,
+    role: 'admin',
+    role_id: superAdminRoleId,
+    is_active: true,
+  });
+
+  await knex('users').insert({
     name: 'Maryam Malik (Admin)',
     email: 'admin@demo.com',
     password_hash: bcryptHash,
@@ -102,6 +111,7 @@ export async function seed(knex: Knex): Promise<void> {
     role_id: superAdminRoleId,
     is_active: true,
   });
+
 
   const customers = [
     { name: 'Alice Johnson', email: 'alice@example.com' },
@@ -250,38 +260,36 @@ export async function seed(knex: Knex): Promise<void> {
 
   const variantIds: number[] = [];
   for (const p of demoProducts) {
+    const catId = catIds[p.catIdx] || catIds[0];
     const [productId] = await knex('products').insert({
       name: p.name,
       slug: slug(p.name),
-      category_id: catIds[p.catIdx],
-      supplier_id: p.supplier_id,
-      supplier_ref: p.supplier_ref,
-      our_ref: p.our_ref,
-      ba_ref: p.ba_ref,
-      brand: p.brand,
-      season: p.season,
-      department: p.department,
-      proposed_retail: p.proposed_retail,
-      proposed_qty: p.proposed_qty,
-      colors: p.colors,
-      materials: p.materials,
-      image_url: p.image_url,
-      photos: p.photos,
       description: `Enterprise grade item ${p.name} built with premium components.`,
       status: 'active',
+      created_at: new Date(),
+      updated_at: new Date(),
     });
 
+    if (catId) {
+      await knex('product_categories').insert({
+        product_id: productId,
+        category_id: catId,
+        is_primary: true,
+      });
+    }
+
     for (let i = 0; i < p.skus.length; i++) {
-      const [vid] = await knex('product_variants').insert({
-        product_id: productId!,
-        sku: p.skus[i]!,
-        option_label: p.options[i]!,
-        selling_price: p.price,
+      const [vId] = await knex('product_variants').insert({
+        product_id: productId,
+        sku: p.skus[i],
         cost_price: p.cost,
+        selling_price: p.price,
         stock_quantity: p.stock,
         image_url: p.image_url,
+        created_at: new Date(),
+        updated_at: new Date(),
       });
-      variantIds.push(vid!);
+      variantIds.push(vId!);
     }
   }
 

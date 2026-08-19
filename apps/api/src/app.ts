@@ -79,18 +79,24 @@ app.get('/health', (_req, res) => {
 app.use('/api/v1', apiKeyMiddleware);
 
 import rolesRoutes from './modules/roles/roles.routes.js';
+import orderInquiriesRoutes from './modules/order-inquiries/order-inquiries.routes.js';
+import emailTemplatesRoutes from './modules/email-templates/email-templates.routes.js';
 
 // ── Feature Routes ────────────────────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/catalog', catalogRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/orders', ordersRoutes);
+app.use('/api/v1/order-inquiries', orderInquiriesRoutes);
+app.use('/api/v1/email-templates', emailTemplatesRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/marketing', marketingRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/discounts', discountsRoutes);
 app.use('/api/v1/cart', cartRoutes);
 app.use('/api/v1', rolesRoutes);
+
+
 
 // ── 404 + Global Error Handler ─────────────────────────────────────────────────
 app.use(notFoundHandler);

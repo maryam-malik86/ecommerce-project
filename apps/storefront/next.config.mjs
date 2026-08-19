@@ -10,8 +10,9 @@ const nextConfig = {
     ];
   },
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'images.unsplash.com'],
   },
 };
+
 
 export default nextConfig;

@@ -6,6 +6,8 @@ import {
   Package,
   FolderTree,
   ShoppingBag,
+  HelpCircle,
+  MessageSquare,
   Warehouse,
   BarChart3,
   Mail,
@@ -30,17 +32,21 @@ const mainNavLinks = [
   { to: '/products', label: 'Products', Icon: Package },
   { to: '/categories', label: 'Collections', Icon: Layers },
   { to: '/orders', label: 'Orders', Icon: ShoppingBag },
+  { to: '/inquiries', label: 'Client Inquiries', Icon: MessageSquare },
   { to: '/inventory', label: 'Inventory', Icon: Warehouse },
   { to: '/analytics', label: 'Analytics', Icon: BarChart3 },
   { to: '/newsletter', label: 'Newsletter', Icon: Mail },
   { to: '/customers', label: 'Customers', Icon: Users },
 ];
 
+
 const systemNavLinks = [
   { to: '/system/staff', label: 'Staff Management', Icon: ShieldCheck },
   { to: '/system/roles', label: 'Roles & Permissions', Icon: KeyRound },
+  { to: '/system/email-templates', label: 'Email Templates', Icon: Mail },
   { to: '/system/settings', label: 'System Settings', Icon: Sliders },
 ];
+
 
 export default function DashboardLayout() {
   const navigate = useNavigate();

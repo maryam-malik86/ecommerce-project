@@ -166,10 +166,20 @@ export default function LoginPage() {
 
           {/* Demo hint */}
           <div className="text-center pt-2 border-t" style={{ borderColor: 'var(--ui-border-base)' }}>
-            <p className="text-xs" style={{ color: 'var(--ui-fg-muted)' }}>
-              Demo: <span className="font-mono">admin@store.com</span> / <span className="font-mono">Admin1234!</span>
-            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setEmail('admin@store.com');
+                setPassword('Admin1234!');
+              }}
+              className="text-xs hover:underline cursor-pointer transition-colors"
+              style={{ color: 'var(--ui-fg-muted)' }}
+              title="Click to fill demo credentials"
+            >
+              Demo: <span className="font-mono font-bold">admin@store.com</span> / <span className="font-mono font-bold">Admin1234!</span> (Click to auto-fill)
+            </button>
           </div>
+
         </div>
       </div>
     </div>

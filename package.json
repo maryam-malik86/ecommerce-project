@@ -5,6 +5,7 @@
   "description": "Enterprise-grade API-first E-Commerce platform (Turborepo monorepo)",
   "scripts": {
     "build": "turbo run build",
+    "start": "node index.js",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
