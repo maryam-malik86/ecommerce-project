@@ -17,10 +17,11 @@ async function main() {
   }
 
   // 3. Start HTTP server
-  const server = app.listen(env.PORT, () => {
-    logger.info(`🚀  API server running on http://localhost:${env.PORT}`);
+  const host = process.env.HOST || '0.0.0.0';
+  const server = app.listen(env.PORT, host, () => {
+    logger.info(`🚀  API server running on http://${host}:${env.PORT}`);
     logger.info(`📋  Environment: ${env.NODE_ENV}`);
-    logger.info(`📖  Health check: http://localhost:${env.PORT}/health`);
+    logger.info(`📖  Health check: http://${host}:${env.PORT}/health`);
   });
 
   // 4. Graceful shutdown handlers
